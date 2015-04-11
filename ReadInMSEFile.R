@@ -205,8 +205,10 @@ root <- function() {
     match("CLOSE");
 }
 ##
-data <- data.frame();
-lines <- 1;
+classData <- data.frame();
+pkgData <- data.frame();
+classLines <- 1;
+pkgLines <- 1;
 ##
 expr <- function(ctx) {
     while("OPEN"==lookahead) {
@@ -246,13 +248,21 @@ expr <- function(ctx) {
         cat("\n")
         attribs <- ctx$getAttribs();
         for(n in names(attribs)) {
-            data[lines,n] <<- attribs[[n]];
+            classData[classLines,n] <<- attribs[[n]];
         }
         parentPackageSubCtx <- ctx$getContextByName("parentPackage");
         if(!is.null(parentPackageSubCtx)) {
-            data[lines,"parentPackage"] <<- parentPackageSubCtx$getRefId();
+            classData[classLines,"parentPackage"] <<- parentPackageSubCtx$getRefId();
         }
-        lines <<- lines+1;
+        classLines <<- classLines+1;
+    }
+    if(!is.null(ctx) && ctx$getCtxName()=="FAMIX.Package") {
+        attribs <- ctx$getAttribs();
+        for(n in names(attribs)) {
+            pkgData[pkgLines,n] <<- attribs[[n]];
+        }
+        pkgData[pkgLines,"ID"] <<- ctx$getId();
+        pkgLines <<- pkgLines+1;
     }
 }
 ##
@@ -313,11 +323,11 @@ colNames <- c(
     "WOC"
 )
 ##
-colIndexes <- which(names(data) %in% colNames)
+colIndexes <- which(names(classData) %in% colNames)
 ##
 ##clean data for having only complete cases. it will sort out all abstract
 ##or interface types which have no metric values
-classData <- data[complete.cases(data[,colIndexes]), ]
+classData <- classData[complete.cases(classData[,colIndexes]), ]
 ##
 ##
 ##
