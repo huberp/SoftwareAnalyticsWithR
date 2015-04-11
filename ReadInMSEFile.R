@@ -2,7 +2,7 @@
 ##
 ##  point "fullqualifiedFileName" to your mse file.
 ##
-fullqualifiedFileName = "D:/xt/projects/SoftwareAnalytics/example_mse_files/cb_mig.mse"
+fullqualifiedFileName = "D:/xt/projects/SoftwareAnalyticsWithR/example_mse_files/junit.mse"
 
 ##
 ## Disclaimer - Currently this is more or less a hack, whose aim is to show
