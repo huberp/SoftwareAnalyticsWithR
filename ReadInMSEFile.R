@@ -333,6 +333,6 @@ classData <- classData[complete.cases(classData[,colIndexes]), ]
 ##
 ##
 library("treemap")
-treemap(dtf=classData,index=c("parentPackage","ID"),"LCC")
+treemap(dtf=classData,index=c("parentPackage","ID"),"LCOM")
 plot(x=classData[,"RFC"],y=classData[,"LCOM"])
 boxplot(LCOM~RFC, data=classData)
