@@ -250,6 +250,7 @@ expr <- function(ctx) {
         for(n in names(attribs)) {
             classData[classLines,n] <<- attribs[[n]];
         }
+        classData[classLines,"ID"] <<- ctx$getId();
         parentPackageSubCtx <- ctx$getContextByName("parentPackage");
         if(!is.null(parentPackageSubCtx)) {
             classData[classLines,"parentPackage"] <<- parentPackageSubCtx$getRefId();
@@ -332,6 +333,6 @@ classData <- classData[complete.cases(classData[,colIndexes]), ]
 ##
 ##
 library("treemap")
-treemap(classData,c("parentPackage"),"LCC")
+treemap(dtf=classData,index=c("parentPackage","ID"),"LCC")
 plot(x=classData[,"RFC"],y=classData[,"LCOM"])
 boxplot(LCOM~RFC, data=classData)
