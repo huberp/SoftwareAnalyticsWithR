@@ -8,7 +8,7 @@ fullqualifiedFileName = "D:/xt/projects/SoftwareAnalyticsWithR/example_mse_files
 ## Disclaimer - Currently this is more or less a hack, whose aim is to show
 ## that the pipeline inFamix parser, read in with R, visualize with R works
 ##
-
+##
 ##http://rmod.lille.inria.fr/archives/reports/Duca11c-Cutter-deliverable22-MSE-FAMIX30.pdf
 ##2.2.1 Grammar
 TOKENS <- list(
@@ -24,9 +24,10 @@ TOKENS <- list(
     EOF   = -1,
     FAULT = -2
 );
-##
-##
-##
+
+####################################################################
+##  COntext class Creator Function
+##  container for data as parsed from MSE File
 newContext <- function() {
     attributes <- list();
     contexts <- list();
@@ -45,7 +46,7 @@ newContext <- function() {
         return (NULL);
     }
     addAttrib <- function(name,val) {
-        print(sprintf("ATTRIBUTE name=%s; val=%s\n",name,as.character(val)));
+        #print(sprintf("ATTRIBUTE name=%s; val=%s\n",name,as.character(val)));
         attributes[[name]] <<- val;
     }
     getAttribs <- function() {
@@ -97,19 +98,19 @@ newContext <- function() {
         toString = toString
     );
 }
+#################################################################################
+## Tokenizer Creator Function
 ##
-##
-##
-tokenizer <- function(fileName) {
+newTokenizer <- function(fileName) {
+    lahead <- NULL;
     currentLine <- NULL;
     currentLineNo <- 0;
     value <- NULL;
     currentPos <- -1;
-    
     con <- file(fileName); 
     open(con,open = "r");
     eof = FALSE;
-    
+    #
     checkLineEmpty <- function() {
         if(is.null(currentLine) || nchar(currentLine) == 0) {
             currentLine <<- NULL;
@@ -117,7 +118,7 @@ tokenizer <- function(fileName) {
         }
         return (FALSE);
     } 
-    
+    #
     loadNextLineOnDemand <- function() {
         ## load line (skipping empty lines)
         while(checkLineEmpty()) {
@@ -131,7 +132,7 @@ tokenizer <- function(fileName) {
         }
         return (1);
     }
-    
+    #
     getNextToken <- function() {
         ## load line (skipping empty lines)
         while(TRUE) {
@@ -157,141 +158,173 @@ tokenizer <- function(fileName) {
                 if(match[1]==1 && 0!=len) {
                     value <<- substr(currentLine,1,len);
                     currentLine <<- substr(currentLine,len+1,nchar(currentLine));
+                    lahead <<- TOK;
                     return (TOK);
                 }
             }
         }
         stop(paste("lexer error:",currentLine,"; at line: ",currentLineNo))
     }
-    
+    #
     close <- function() {
         base:::close(con);
     }
-    
+    #
     isEof <- function() {
         eof;
     }
-    
+    #
     getValue <- function() {
         return (value);
     }
-    
+    #
+    match <- function(token) {
+        if(lahead == token) {
+            lahead <<- getNextToken();
+            #print(sprintf("%s -> %s; %s",lookahead, tok$getValue(), tok$isEof()));
+        } else {
+            stop(paste0("match error lookahead: ",lahead,"; expected: ",token))
+        }
+    }
+    #
+    getLA <- function() {
+        lahead;
+    }
+    #
+    isLA <- function(token) {
+        return (lahead == token);
+    }
+    #
     list (
         getNextToken = getNextToken,
         getValue = getValue,
         isEof = isEof,
-        close = close
+        close = close,
+        match = match,
+        lookahead = getLA,
+        isLA = isLA
     );
     
 }
 
-lookahead <- NA;
-tok <- tokenizer(fullqualifiedFileName);
+tok <- newTokenizer(fullqualifiedFileName);
 
-match <- function(token) {
-    if(lookahead == token) {
-        lookahead <<- tok$getNextToken();
-        #print(sprintf("%s -> %s; %s",lookahead, tok$getValue(), tok$isEof()));
-    } else {
-        stop(paste0("match error lookahead: ",lookahead,"; expected: ",token))
+##
+##
+
+##
+
+##################################################################################
+## MSE Parser
+##
+newMSEParser <- function(tokenizer) {
+    classData <- data.frame();
+    pkgData <- data.frame();
+    classLines <- 1;
+    pkgLines <- 1;
+    ##
+    expr <- function(ctx) {
+        while("OPEN"==tokenizer$lookahead()) {
+            tokenizer$match("OPEN")
+            if(tokenizer$isLA("IDENT")) {
+                nam <- tokenizer$getValue();
+                tokenizer$match("IDENT")
+                val <- tokenizer$getValue();
+                switch(
+                    tokenizer$lookahead(),
+                    OPEN  = { oCtx<-ctx; 
+                              ctx<-newContext();
+                              oCtx$addContext(ctx);
+                              ctx$setCtxName(nam); 
+                              expr(ctx); 
+                              ctx<-oCtx; 
+                              tokenizer$match("CLOSE");},
+                    NUM   = { tokenizer$match("NUM");  ctx$addAttrib(nam,as.numeric(val)); tokenizer$match("CLOSE");   },
+                    STR   = { tokenizer$match("STR");  ctx$addAttrib(nam,as.character(val)); tokenizer$match("CLOSE");},
+                    BOOL  = { tokenizer$match("BOOL"); ctx$addAttrib(nam,as.logical(val)); tokenizer$match("CLOSE");  },
+                    CLOSE = { tokenizer$match("CLOSE"); return}
+                );
+            } else if (tokenizer$isLA("ID")) {
+                val <- identifier();
+                ctx$setId(val);
+                tokenizer$match("CLOSE");
+            } else if (tokenizer$isLA("REF")) {
+                val<-reference();
+                ctx$setRefId(val);
+                tokenizer$match("CLOSE");
+            } else if (tokenizer$isLA("CLOSE")) {
+                tokenizer$match("CLOSE");
+                return;
+            } 
+        }
+        if(!is.null(ctx) && ctx$getCtxName()=="FAMIX.Class") {
+            cat(ctx$toString());
+            cat("\n")
+            attribs <- ctx$getAttribs();
+            for(n in names(attribs)) {
+                classData[classLines,n] <<- attribs[[n]];
+            }
+            classData[classLines,"ID"] <<- ctx$getId();
+            parentPackageSubCtx <- ctx$getContextByName("parentPackage");
+            if(!is.null(parentPackageSubCtx)) {
+                classData[classLines,"parentPackage"] <<- parentPackageSubCtx$getRefId();
+            }
+            classLines <<- classLines+1;
+        }
+        if(!is.null(ctx) && ctx$getCtxName()=="FAMIX.Package") {
+            attribs <- ctx$getAttribs();
+            for(n in names(attribs)) {
+                pkgData[pkgLines,n] <<- attribs[[n]];
+            }
+            pkgData[pkgLines,"ID"] <<- ctx$getId();
+            pkgLines <<- pkgLines+1;
+        }
     }
-}
-##
-##
-root <- function() {
-    ctx<-newContext();
-    match("OPEN");
-    expr(ctx);
-    match("CLOSE");
-}
-##
-classData <- data.frame();
-pkgData <- data.frame();
-classLines <- 1;
-pkgLines <- 1;
-##
-expr <- function(ctx) {
-    while("OPEN"==lookahead) {
-        match("OPEN")
-        if("IDENT"==lookahead) {
-            nam <- tok$getValue();
-            match("IDENT")
-            val <- tok$getValue();
-            switch(
-                lookahead,
-                OPEN  = { oCtx<-ctx; 
-                          ctx<-newContext();
-                          oCtx$addContext(ctx);
-                          ctx$setCtxName(nam); 
-                          expr(ctx); 
-                          ctx<-oCtx; match("CLOSE");},
-                NUM   = { match("NUM");  ctx$addAttrib(nam,as.numeric(val)); match("CLOSE");   },
-                STR   = { match("STR");  ctx$addAttrib(nam,as.character(val)); match("CLOSE");},
-                BOOL  = { match("BOOL"); ctx$addAttrib(nam,as.logical(val)); match("CLOSE");  },
-                CLOSE = { match("CLOSE"); return}
+    ##
+    identifier <- function() {
+        tokenizer$match("ID");
+        val <- tokenizer$getValue();
+        #print(sprintf("EMIT ID: %s\n",val));
+        tokenizer$match("NUM");
+        return (as.numeric(val));
+    }
+    ##
+    reference <- function() {
+        tokenizer$match("REF");
+        val <- tokenizer$getValue();
+        #print(sprintf("EMIT REF: %s\n",val));
+        tokenizer$match("NUM");
+        return (as.numeric(val));
+    }
+    ##
+    root <- function() {
+        ctx<-newContext();
+        tokenizer$match("OPEN");
+        expr(ctx);
+        tokenizer$match("CLOSE");
+    }
+    ##
+    parse <- function() {
+        while(!tok$isEof()) {
+            lookahead <- tok$getNextToken();
+            if(tok$isEof()) {
+                break;
+            }
+            print(sprintf("%s -> %s; %s",lookahead, tok$getValue(), tok$isEof()));
+            root();
+        }
+        return (
+            list(classData=classData,pkgData=pkgData)
             );
-        } else if ("ID" == lookahead) {
-            val <- identifier();
-            ctx$setId(val);
-            match("CLOSE");
-        } else if ("REF" == lookahead) {
-            val<-reference();
-            ctx$setRefId(val);
-            match("CLOSE");
-        } else if ("CLOSE" == lookahead) {
-            match("CLOSE");
-            return;
-        } 
     }
-    if(!is.null(ctx) && ctx$getCtxName()=="FAMIX.Class") {
-        cat(ctx$toString());
-        cat("\n")
-        attribs <- ctx$getAttribs();
-        for(n in names(attribs)) {
-            classData[classLines,n] <<- attribs[[n]];
-        }
-        classData[classLines,"ID"] <<- ctx$getId();
-        parentPackageSubCtx <- ctx$getContextByName("parentPackage");
-        if(!is.null(parentPackageSubCtx)) {
-            classData[classLines,"parentPackage"] <<- parentPackageSubCtx$getRefId();
-        }
-        classLines <<- classLines+1;
-    }
-    if(!is.null(ctx) && ctx$getCtxName()=="FAMIX.Package") {
-        attribs <- ctx$getAttribs();
-        for(n in names(attribs)) {
-            pkgData[pkgLines,n] <<- attribs[[n]];
-        }
-        pkgData[pkgLines,"ID"] <<- ctx$getId();
-        pkgLines <<- pkgLines+1;
-    }
-}
-##
-##
-identifier <- function() {
-    match("ID");
-    val <- tok$getValue();
-    print(sprintf("EMIT ID: %s\n",val));
-    match("NUM");
-    return (as.numeric(val));
+    list(
+        parse = parse
+    );
 }
 
-reference <- function() {
-    match("REF");
-    val <- tok$getValue();
-    print(sprintf("EMIT REF: %s\n",val));
-    match("NUM");
-    return (as.numeric(val));
-}
-
-while(!tok$isEof()) {
-    lookahead <- tok$getNextToken();
-    if(tok$isEof()) {
-        break;
-    }
-    print(sprintf("%s -> %s; %s",lookahead, tok$getValue(), tok$isEof()));
-    root();
-}
+mseParser <- newMSEParser(tok);
+mseData <- mseParser$parse();
+classData <- mseData[[1]];
 tok$close();
 ##
 ##
@@ -333,6 +366,14 @@ classData <- classData[complete.cases(classData[,colIndexes]), ]
 ##
 ##
 library("treemap")
+par(mfrow=c(2,2))
 treemap(dtf=classData,index=c("parentPackage","ID"),"LCOM")
 plot(x=classData[,"RFC"],y=classData[,"LCOM"])
 boxplot(LCOM~RFC, data=classData)
+##
+library(googleVis)
+gvisTreeMap(classData,
+            idvar = "parentPackage", parentvar = "parentPackage",
+            sizevar = "LCOM", colorvar = "LCOM",
+            options = list(),
+            chartid)
