@@ -156,7 +156,12 @@ newTokenizer <- function(fileName) {
                 match <- regexpr(TOKENS[[TOK]],currentLine);
                 len <- attr(match,"match.length");
                 if(match[1]==1 && 0!=len) {
-                    value <<- substr(currentLine,1,len);
+                    if("STR"==TOK) {
+                        #strip away the ' around STR values
+                        value <<- substr(currentLine,2,len-1);
+                    } else {
+                        value <<- substr(currentLine,1,len);
+                    }
                     currentLine <<- substr(currentLine,len+1,nchar(currentLine));
                     lahead <<- TOK;
                     return (TOK);
@@ -325,12 +330,16 @@ newMSEParser <- function(tokenizer) {
 mseParser <- newMSEParser(tok);
 mseData <- mseParser$parse();
 classData <- mseData[[1]];
+pkgData <- mseData[[2]];
 tok$close();
 ##
+## about colnames, i.e. metric names
 ##
+## http://habanero.ifi.uzh.ch/javaFamixMetrics/
+## https://github.com/mircealungu/Softwarenaut/tree/master/dist-base/tools/inFusion
 ##
 colNames <- c(
-    "AMW",
+    "AMW",  #Average Method Weight (AMW) for every class. The average static complexity (in our case, McCabe's) of the methods of the measured class
     "BOvR",
     "BUR",
     "CPFD",
@@ -364,16 +373,58 @@ colIndexes <- which(names(classData) %in% colNames)
 classData <- classData[complete.cases(classData[,colIndexes]), ]
 ##
 ##
+##build a parent child relation in package data based on string prefixes
+pkgData<-pkgData[order(nchar(pkgData$name),decreasing = TRUE),];
+pkgData[,"parentPackage"] <- NA;
+for(idx in 1:dim(pkgData)[1]) {
+    aPkg <- pkgData$name[idx];
+    largerOrEqualInSize <- nchar(pkgData$name) >= nchar(aPkg);
+    hasNoParentSetYet <- is.na(pkgData[,"parentPackage"]);
+    notSelf <- 1:dim(pkgData)[1] != idx
+    combinedIndex <- which(largerOrEqualInSize & hasNoParentSetYet & notSelf);
+    if(length(combinedIndex) > 1) {
+        matches <- grep(paste0("^",aPkg,".*"),pkgData[combinedIndex,"name"])
+        cat(matches);
+        if(length(matches)!=0) {
+            pkgData[combinedIndex[matches],"parentPackage"] <- pkgData[idx,"ID"];
+        }
+    }
+}
+##
+##ADD a artificial root Node and point all packages which have still parent == "NA" to it. 
+##A single root node is required by googleVis. 
+rootRowIdx <- dim(pkgData)[1]+1;
+rootID <- max( max(pkgData$ID), max(classData$ID) ) + 1;
+pkgData[is.na(pkgData[,"parentPackage"]),"parentPackage"] <- rootID;
+pkgData[rootRowIdx,"name"] <- "root";
+pkgData[rootRowIdx,"parentPackage"] <- NA;
+pkgData[rootRowIdx,"ID"] <- rootID;
+##
+##
+##addedLines <- dim(classData)[1]+1:dim(pkgData)[1];
+##classData[addedLines,"ID"]<-pkgData[,"ID"];
+##classData[addedLines,"parentPackage"]<-pkgData[,"parentPackage"];
+##classData[addedLines,"name"]<-pkgData[,"name"];
+##
+##
+mergedData <- merge(classData,pkgData[,c("ID","name")], by.x="parentPackage", by.y="ID")
+##
 ##
 library("treemap")
 par(mfrow=c(2,2))
-treemap(dtf=classData,index=c("parentPackage","ID"),"LCOM")
+treemap(dtf=mergedData,index=c("name.y","name.x"),"NOM")
 plot(x=classData[,"RFC"],y=classData[,"LCOM"])
+plot(x=classData[,"NOM"],y=classData[,"LCOM"])
 boxplot(LCOM~RFC, data=classData)
+boxplot(LCOM~NOM, data=classData)
+boxplot(LCOM~AMW, data=classData)
 ##
+##
+##google vis cannot use a ID column...what the heck
 library(googleVis)
-gvisTreeMap(classData,
-            idvar = "parentPackage", parentvar = "parentPackage",
-            sizevar = "LCOM", colorvar = "LCOM",
+classData$ident <- classData$ID
+tmHtml <- gvisTreeMap(classData,
+            idvar = "ident", parentvar = "parentPackage",
+            sizevar = "ID", colorvar = "ID",
             options = list(),
-            chartid)
+            "STUFF");
