@@ -371,6 +371,7 @@ colIndexes <- which(names(classData) %in% colNames)
 ##clean data for having only complete cases. it will sort out all abstract
 ##or interface types which have no metric values
 classData <- classData[complete.cases(classData[,colIndexes]), ]
+classData$isClassData <- TRUE;
 ##
 ##
 ##build a parent child relation in package data based on string prefixes
@@ -399,32 +400,47 @@ pkgData[is.na(pkgData[,"parentPackage"]),"parentPackage"] <- rootID;
 pkgData[rootRowIdx,"name"] <- "root";
 pkgData[rootRowIdx,"parentPackage"] <- NA;
 pkgData[rootRowIdx,"ID"] <- rootID;
+names(pkgData)[which(names(pkgData)=="name")] <- "packageName"
 ##
 ##
-##addedLines <- dim(classData)[1]+1:dim(pkgData)[1];
-##classData[addedLines,"ID"]<-pkgData[,"ID"];
-##classData[addedLines,"parentPackage"]<-pkgData[,"parentPackage"];
-##classData[addedLines,"name"]<-pkgData[,"name"];
-##
-##
-mergedData <- merge(classData,pkgData[,c("ID","name")], by.x="parentPackage", by.y="ID")
+mergedData <- merge(classData,pkgData[,c("ID","packageName")], by.x="parentPackage", by.y="ID",all.x=TRUE)
 ##
 ##
 library("treemap")
-par(mfrow=c(2,2))
-treemap(dtf=mergedData,index=c("name.y","name.x"),"NOM")
+par(mfrow=c(2,3))
 plot(x=classData[,"RFC"],y=classData[,"LCOM"])
 plot(x=classData[,"NOM"],y=classData[,"LCOM"])
 boxplot(LCOM~RFC, data=classData)
 boxplot(LCOM~NOM, data=classData)
 boxplot(LCOM~AMW, data=classData)
+treemap(dtf=mergedData,index=c("packageName","name"),"NOM")
 ##
 ##
-##google vis cannot use a ID column...what the heck
+##more preparations for googleVis, we have to add package data
+##in order to build a structure which is rooted at exactly one
+##root object, see also "adding a single root" above
+addedLines <- dim(classData)[1]+1:dim(pkgData)[1];
+googelVisData <- classData;
+googelVisData[addedLines,"ID"]<-pkgData[,"ID"];
+googelVisData[addedLines,"parentPackage"]<-pkgData[,"parentPackage"];
+googelVisData[addedLines,"name"]<-pkgData[,"packageName"];
+mergedGoogleData <- merge(googelVisData,pkgData[,c("ID","packageName")], by.x="parentPackage", by.y="ID", all.x=TRUE)
+mergedGoogleData$isClassData[which(is.na(mergedGoogleData$isClassData))] <- FALSE 
+##
+##
+##google vis has some peculiarities
+##1.) it cannot use a ID column as "idvar" with name "ID"...what the heck...You can create a "ident" column and copy values instead.
+##2.) and it cannot cope with a value of id column which is not unique...this can happen in inFamix parser when a class
+##    has more than one inner class coming from different locations in same Java File, 
+##    the n inner classes will all have $1 as postfix.
+##    ==> We make it unique by concatenating class name and class ID to give unique value
 library(googleVis)
-classData$ident <- classData$ID
-tmHtml <- gvisTreeMap(classData,
-            idvar = "ident", parentvar = "parentPackage",
-            sizevar = "ID", colorvar = "ID",
-            options = list(),
-            "STUFF");
+classDataIdx <- which(mergedGoogleData$isClassData)
+mergedGoogleData$name[classDataIdx] <- sprintf("%s(%s)",mergedGoogleData$name[classDataIdx],mergedGoogleData$ID[classDataIdx])
+gvisSizeVar <- "LCOM"
+mergedGoogleData[which(is.na(mergedGoogleData[,gvisSizeVar])), gvisSizeVar] <- 0;
+tmHtml <- gvisTreeMap(mergedGoogleData,
+            idvar = "name", parentvar = "packageName",
+            sizevar = "LCOM", colorvar = "ID",
+            options = list(maxDepth=3),
+            gvisSizeVar);
