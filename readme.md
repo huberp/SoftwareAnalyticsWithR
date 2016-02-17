@@ -1,6 +1,6 @@
 # Software Analystics With R
 
-This little experiment is based on the Java Parser Software of a company called "intooitus" and which can be downloaded here: https://www.intooitus.com/products/infamix/download.
+This little experiment is based on the Java Parser Software of a company called "intooitus" and which can be downloaded here: https://www.intooitus.com/node/85/download.
 Output of this parser applied to Java Source Code is a so called MSE[1] file which contains Quality Metrics for the entities which have been parsed, mainly packages and classes.
 Currently the R script just builds a dataframe with data coming from the class data provided in a mse file
 
