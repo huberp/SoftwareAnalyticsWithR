@@ -10,7 +10,7 @@ Currently the R script just builds a dataframe with data coming from the class d
 Disclaimer - Currently this is more or less a hack, whose aim is to show that the pipeline inFamix parser, read in with R, visualize with R works 
 
 # How to use it?
-* Download the parser from here: https://www.intooitus.com/products/infamix/download
+* Download the parser from here: https://www.intooitus.com/node/85/download
 * Run it with your Java Project
 * Save the output file somewhere
 * Open the R file "ReadInMSEFile.R" and set the varaible "fullqualifiedFileName" to point to your mse file. Save it
