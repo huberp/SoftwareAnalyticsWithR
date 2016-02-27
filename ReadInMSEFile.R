@@ -2,11 +2,28 @@
 ##
 ##  point "fullqualifiedFileName" to your mse file.
 ##
-fullqualifiedFileName = "D:/xt/projects/SoftwareAnalyticsWithR/example_mse_files/junit.mse"
+fullqualifiedFileName = "D:/development/ws/github/SoftwareAnalyticsWithR/example_mse_files/junit.mse"
 
 ##
-## Disclaimer - Currently this is more or less a hack, whose aim is to show
-## that the pipeline inFamix parser, read in with R, visualize with R works
+## Disclaimer - Currently this is more or less a hack, which tries to show
+## that the pipeline 
+##         "use inFamix parser to generate mse file -> read in mse file with R -> visualize results with R" 
+## works.
+##
+
+##
+##
+## PLEASE install packages "googleVis" and "treemap"
+if(!require("treemap")) {
+    install.packages("treemap")    
+    require("treemap")
+}
+
+if(!require("googleVis")) {
+    install.packages("googleVis")    
+    require("googleVis")
+}
+
 ##
 ##
 ##http://rmod.lille.inria.fr/archives/reports/Duca11c-Cutter-deliverable22-MSE-FAMIX30.pdf
@@ -28,6 +45,10 @@ TOKENS <- list(
 ####################################################################
 ##  COntext class Creator Function
 ##  container for data as parsed from MSE File
+##  Contexts are built for MSE-File structures like "FAMIX.Class" or
+##  "FAMIX.Package"
+##  A context can have attributes, like for instance each "FAMIX.Class"
+##  has a set of metrics attributes
 newContext <- function() {
     attributes <- list();
     contexts <- list();
@@ -263,8 +284,7 @@ newMSEParser <- function(tokenizer) {
             } 
         }
         if(!is.null(ctx) && ctx$getCtxName()=="FAMIX.Class") {
-            cat(ctx$toString());
-            cat("\n")
+            cat(ctx$toString(),"\n");
             attribs <- ctx$getAttribs();
             for(n in names(attribs)) {
                 classData[classLines,n] <<- attribs[[n]];
@@ -277,6 +297,7 @@ newMSEParser <- function(tokenizer) {
             classLines <<- classLines+1;
         }
         if(!is.null(ctx) && ctx$getCtxName()=="FAMIX.Package") {
+            cat(ctx$toString(),"\n");
             attribs <- ctx$getAttribs();
             for(n in names(attribs)) {
                 pkgData[pkgLines,n] <<- attribs[[n]];
@@ -333,12 +354,12 @@ classData <- mseData[[1]];
 pkgData <- mseData[[2]];
 tok$close();
 ##
-## about colnames, i.e. metric names
+## about metricsNames, i.e. metric names
 ##
 ## http://habanero.ifi.uzh.ch/javaFamixMetrics/
 ## https://github.com/mircealungu/Softwarenaut/tree/master/dist-base/tools/inFusion
 ##
-colNames <- c(
+metricsNames <- c(
     "AMW",  #Average Method Weight (AMW) for every class. The average static complexity (in our case, McCabe's) of the methods of the measured class
     "BOvR",
     "BUR",
@@ -366,7 +387,7 @@ colNames <- c(
     "WOC"
 )
 ##
-colIndexes <- which(names(classData) %in% colNames)
+colIndexes <- which(names(classData) %in% metricsNames)
 ##
 ##clean data for having only complete cases. it will sort out all abstract
 ##or interface types which have no metric values
@@ -375,21 +396,29 @@ classData$isClassData <- TRUE;
 ##
 ##
 ##build a parent child relation in package data based on string prefixes
+##we find for each package P all other packages that are children
 pkgData<-pkgData[order(nchar(pkgData$name),decreasing = TRUE),];
 pkgData[,"parentPackage"] <- NA;
+##we start by doing some precomputations in order to speed things up...we compute package name lengths just once
+pkgNameLengths <- nchar(pkgData$name)
 for(idx in 1:dim(pkgData)[1]) {
     aPkg <- pkgData$name[idx];
-    largerOrEqualInSize <- nchar(pkgData$name) >= nchar(aPkg);
+    cat(sprintf("Find Children of pakage '%s'",aPkg))
+    #build boolean vector of all packages which have equal or more characters, children must have longer names
+    largerOrEqualInSize <- pkgNameLengths >= nchar(aPkg);
+    #build boolean vector of all packages which have no parent set yet
     hasNoParentSetYet <- is.na(pkgData[,"parentPackage"]);
+    #build boolean vector with TRUE where the index is not equal ot the current index. this will prevent a "self match"
     notSelf <- 1:dim(pkgData)[1] != idx
     combinedIndex <- which(largerOrEqualInSize & hasNoParentSetYet & notSelf);
     if(length(combinedIndex) > 1) {
         matches <- grep(paste0("^",aPkg,".*"),pkgData[combinedIndex,"name"])
-        cat(matches);
+        cat("; Matching indexes: ",matches);
         if(length(matches)!=0) {
             pkgData[combinedIndex[matches],"parentPackage"] <- pkgData[idx,"ID"];
         }
     }
+    cat("\n")
 }
 ##
 ##ADD a artificial root Node and point all packages which have still parent == "NA" to it. 
@@ -443,4 +472,4 @@ tmHtml <- gvisTreeMap(mergedGoogleData,
             idvar = "name", parentvar = "packageName",
             sizevar = "LCOM", colorvar = "ID",
             options = list(maxDepth=3),
-            gvisSizeVar);
+            gvisSizeVar)
