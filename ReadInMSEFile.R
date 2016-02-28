@@ -352,6 +352,7 @@ mseParser <- newMSEParser(tok);
 mseData <- mseParser$parse();
 classData <- mseData[[1]];
 pkgData <- mseData[[2]];
+
 tok$close();
 ##
 ## about metricsNames, i.e. metric names
@@ -430,6 +431,10 @@ pkgData[rootRowIdx,"name"] <- "root";
 pkgData[rootRowIdx,"parentPackage"] <- NA;
 pkgData[rootRowIdx,"ID"] <- rootID;
 names(pkgData)[which(names(pkgData)=="name")] <- "packageName"
+##
+##
+saveRDS(classData,file="./junit_classData.rds", compress = T);
+saveRDS(pkgData,file="./junit_pkgData.rds", compress = T);
 ##
 ##
 mergedData <- merge(classData,pkgData[,c("ID","packageName")], by.x="parentPackage", by.y="ID",all.x=TRUE)

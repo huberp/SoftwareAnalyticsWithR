@@ -18,6 +18,9 @@ Disclaimer - Currently this is more or less a hack, whose aim is to show that th
 * In the End you will have a dataframe called "classData" which contains all objects of Type INFAMIX.CLASS, i.e. the class files of your java project minus interfaces. 
 * Now it's up to you to run several plots. The R file contains 3 examples of plots in the very last lines, a treemap, a xy plot and a boxplot (find them in example_plots)
 
+#Further Notes
+Based on the work here I have created a small R shiny web app which is hosted here: https://github.com/huberp/DataScienceSpecDataProducts
+It's nothing spectacular, just my course project for the Coursera Data Science Specialization "Creating Data Products" Course.
 
 ---
 [1] http://rmod.lille.inria.fr/archives/reports/Duca11c-Cutter-deliverable22-MSE-FAMIX30.pdf
